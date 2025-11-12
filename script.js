@@ -7,45 +7,42 @@ class OnlinePVPGame {
         this.isHost = false;
         this.currentScreen = 'title';
 
-        // --- ゲーム定数 (サーバーと同期) ---
+        // --- ゲーム定数 ---
         this.WIDTH = 800;
         this.HEIGHT = 600;
         this.PIXEL_SIZE = 20; // 塗りの粒度/ブラシサイズ
         this.MOVE_SPEED = 6;
-        this.GAME_DURATION = 60000;
+        this.AVAILABLE_COLORS = [
+            '#E74C3C', '#3498DB', '#2ECC71', '#F1C40F', '#9B59B6', '#1ABC9C', '#F39C12', '#2C3E50'
+        ];
         
         // --- ゲームインスタンス変数 ---
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
         this.gameRunning = false;
         this.gameTimer = 0;
-        this.lastGameUpdateTime = 0;
         this.animationFrameId = null;
 
-        // サーバーから受け取る全プレイヤーの状態 (自分自身も含む)
+        // サーバーから受け取る状態
         this.players = {}; 
         this.playerUnits = {}; // DOMのユニット要素
-
-        // 塗りつぶしマップ (サーバーから受け取ったものを描画)
         this.territoryMap = null; 
 
         // --- DOM要素 ---
         this.timerDisplay = document.getElementById('timer');
         this.statusMessage = document.getElementById('status-message');
-        this.scoreP1Display = document.getElementById('scoreP1');
-        this.scoreP2Display = document.getElementById('scoreP2');
-        this.scoreGaugeP1 = document.getElementById('scoreGaugeP1');
-        this.scoreGaugeP2 = document.getElementById('scoreGaugeP2');
+        this.scoreGaugeContainer = document.getElementById('score-gauge-container');
+        this.scoreBoardList = document.getElementById('score-board-list');
         this.victoryScreen = document.getElementById('clear-screen');
         this.victoryMessage = document.getElementById('victoryMessage');
-        this.finalScoreP1Display = document.getElementById('finalScoreP1');
-        this.finalScoreP2Display = document.getElementById('finalScoreP2');
+        this.finalScoreList = document.getElementById('final-score-list');
         this.restartButton = document.getElementById('restartButton');
         this.startButton = document.getElementById('start-game-button');
         
         // --- 入力制御 ---
         this.lastMoveTime = 0;
-        this.moveDelay = 15; // サーバー側が受け付ける頻度と合わせる
+        this.moveDelay = 15; 
+        this.keyStates = { 'w': false, 'a': false, 's': false, 'd': false, 'up': false, 'down': false, 'left': false, 'right': false };
 
         this.init();
     }
@@ -55,12 +52,11 @@ class OnlinePVPGame {
         this.showScreen('title');
         this.ctx.fillStyle = '#ffffff';
         this.ctx.fillRect(0, 0, this.WIDTH, this.HEIGHT);
-        this.updateGamepadStatus();
         this.startGamepadPolling();
     }
 
     setupEventListeners() {
-        // --- 接続/ロビー関連 ---
+        // ... (接続/ロビー関連は前回と同じ) ...
         document.getElementById('create-room-button').addEventListener('click', () => this.showConnectionModal('host'));
         document.getElementById('join-room-button').addEventListener('click', () => this.showConnectionModal('guest'));
         document.getElementById('connect-submit').addEventListener('click', () => this.connectToServer());
@@ -70,10 +66,9 @@ class OnlinePVPGame {
         this.restartButton.addEventListener('click', () => this.disconnectServer());
         document.getElementById('back-to-title').addEventListener('click', () => this.disconnectServer());
 
-        // --- ゲームパッド/キーボード ---
-        window.addEventListener("gamepadconnected", () => this.updateGamepadStatus());
-        window.addEventListener("gamepaddisconnected", () => this.updateGamepadStatus());
-        window.addEventListener('keydown', (e) => this.handleKeyboardInput(e));
+        // --- キーボード入力 (修正: KeyDown/KeyUpで状態管理し、requestAnimationFrameで送信) ---
+        window.addEventListener('keydown', (e) => this.handleKeyChange(e.key, true));
+        window.addEventListener('keyup', (e) => this.handleKeyChange(e.key, false));
 
         // --- ロビー色選択 ---
         document.getElementById('color-picker').addEventListener('click', (e) => {
@@ -84,7 +79,19 @@ class OnlinePVPGame {
         });
     }
 
-    // --- 画面遷移/モーダル処理 (前回と同じロジックを使用) ---
+    // キーボードの状態を更新する
+    handleKeyChange(key, isPressed) {
+        key = key.toLowerCase();
+        switch (key) {
+            case 'w': case 'arrowup':    this.keyStates['w'] = isPressed; break;
+            case 's': case 'arrowdown':  this.keyStates['s'] = isPressed; break;
+            case 'a': case 'arrowleft':  this.keyStates['a'] = isPressed; break;
+            case 'd': case 'arrowright': this.keyStates['d'] = isPressed; break;
+        }
+    }
+
+
+    // --- 画面遷移/モーダル処理 (前回と同じ) ---
     showScreen(screenName) {
         document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.remove('active');
@@ -97,12 +104,12 @@ class OnlinePVPGame {
              this.updateLobbyStatus(this.players); 
         }
         
-        // ゲーム画面に入る際にアニメーション開始
         if (screenName === 'game') {
             this.gameRunning = true;
-            this.animationFrameId = requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
+            if (!this.animationFrameId) {
+                 this.animationFrameId = requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
+            }
         } else {
-            // ゲーム画面から離れる際にアニメーション停止
             if (this.animationFrameId) {
                 cancelAnimationFrame(this.animationFrameId);
                 this.animationFrameId = null;
@@ -111,6 +118,7 @@ class OnlinePVPGame {
     }
     
     showConnectionModal(type) {
+        // ... (前回と同じ) ...
         this.isHost = (type === 'host');
         document.getElementById('connection-title').textContent = this.isHost ? '部屋を作成 (ホスト)' : '部屋に参加 (ゲスト)';
         document.getElementById('connect-submit').textContent = this.isHost ? '部屋を作成' : '接続して参加';
@@ -125,14 +133,14 @@ class OnlinePVPGame {
         document.getElementById('title-screen').classList.add('active');
     }
 
-    // --- 接続処理 ---
+    // --- 接続処理 (前回と同じ) ---
     connectToServer() {
         const address = document.getElementById('server-address').value.trim();
         const parts = address.split(':');
         let ip = parts[0];
         let port = parts.length === 2 ? parts[1] : (ip !== 'localhost' && ip !== '127.0.0.1' ? '443' : '80');
         
-        const isSecureHost = ip !== 'localhost' && ip !== '127.0.0.1';
+        const isSecureHost = ip !== 'localhost' && ip !== '127.0.0.1' && ip.includes('.');
         const protocol = isSecureHost ? 'wss' : 'ws'; 
         
         let url;
@@ -190,7 +198,7 @@ class OnlinePVPGame {
         }
     }
 
-    // --- サーバーメッセージ処理 ---
+    // --- サーバーメッセージ処理 (前回と同じ) ---
     handleServerMessage(data) {
         switch (data.type) {
             case 'ROOM_READY':
@@ -209,7 +217,6 @@ class OnlinePVPGame {
                 this.players = data.players;
                 this.territoryMap = data.territoryMap;
                 this.gameTimer = data.duration;
-                this.lastGameUpdateTime = performance.now(); // タイマー同期用の基準時刻
                 this.initializeGameUnits();
                 this.showScreen('game');
                 break;
@@ -218,7 +225,6 @@ class OnlinePVPGame {
                 this.players = data.players;
                 this.territoryMap = data.territoryMap;
                 this.gameTimer = data.duration;
-                this.lastGameUpdateTime = performance.now();
                 break;
                 
             case 'GAME_END':
@@ -230,19 +236,24 @@ class OnlinePVPGame {
 
             case 'ERROR':
                 alert(`エラー: ${data.message}`);
-                this.disconnectServer();
+                // エラー時はタイトルに戻る
+                if (this.currentScreen !== 'title') {
+                    this.disconnectServer();
+                }
                 break;
         }
     }
     
-    // --- ロビー処理 (前回と同じロジックを使用) ---
+    // --- ロビー処理 (前回と同じだが色数を8色に) ---
     updateLobbyStatus(playersData) {
         const playerList = document.getElementById('lobby-player-list');
         const playerCount = Object.keys(playersData).length;
         
         this.updateColorPicker(playersData); // 色選択UIを更新
 
-        playerList.innerHTML = `<h4>参加プレイヤー (${playerCount}人):</h4>`;
+        playerList.innerHTML = `<h4>参加プレイヤー (${playerCount} / 8人):</h4>`;
+        
+        // スコア順にソートして表示
         Object.keys(playersData).sort().forEach(id => {
             const isMe = id === this.playerId;
             const playerDiv = document.createElement('p');
@@ -272,22 +283,16 @@ class OnlinePVPGame {
     
     selectColor(color) {
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({
-                type: 'SELECT_COLOR',
-                color: color
-            }));
-            // サーバーからの LOBBY_UPDATE で確定した色が反映される
+            this.socket.send(JSON.stringify({ type: 'SELECT_COLOR', color: color }));
         }
     }
     
     updateColorPicker(playersData) {
-        // ... (前回と同じ AVAILABLE_COLORSとロジックをここで実行) ...
-        const AVAILABLE_COLORS = ['#E74C3C', '#3498DB', '#2ECC71', '#F1C40F', '#9B59B6', '#1ABC9C'];
         const colorPicker = document.getElementById('color-picker');
         
         if (!this.colorPickerInitialized) {
             colorPicker.innerHTML = '';
-            AVAILABLE_COLORS.forEach(color => {
+            this.AVAILABLE_COLORS.forEach(color => {
                 const button = document.createElement('div');
                 button.className = 'color-option';
                 button.dataset.color = color;
@@ -319,22 +324,20 @@ class OnlinePVPGame {
 
     // --- ゲームユニットの初期化/同期 ---
     initializeGameUnits() {
+        // 既存のユニットを削除
+        Object.values(this.playerUnits).forEach(unit => unit.remove());
         this.playerUnits = {};
-        const playerKeys = Object.keys(this.players).sort(); 
         
-        playerKeys.forEach((id, index) => {
+        const playerKeys = Object.keys(this.players); 
+        const wrapper = document.querySelector('.game-board-wrapper');
+        
+        playerKeys.forEach((id) => {
             const player = this.players[id];
             
-            // P1/P2ユニットのDOMを再利用するか、新しく作る
-            const unitId = `player${index + 1}-unit`; 
-            let unitElement = document.getElementById(unitId);
-            
-            if (!unitElement) {
-                 unitElement = document.createElement('div');
-                 unitElement.id = unitId;
-                 unitElement.className = 'player-unit';
-                 document.querySelector('.game-board-wrapper').appendChild(unitElement);
-            }
+            let unitElement = document.createElement('div');
+            unitElement.id = `unit-${id}`;
+            unitElement.className = 'player-unit';
+            wrapper.appendChild(unitElement);
             
             unitElement.style.display = 'block';
             unitElement.style.backgroundColor = player.color;
@@ -346,12 +349,6 @@ class OnlinePVPGame {
             
             this.playerUnits[id] = unitElement;
         });
-
-        // 不要なユニットDOMを非表示にする（例：3P以上対応の場合）
-        for (let i = playerKeys.length + 1; i <= 6; i++) {
-             const unit = document.getElementById(`player${i}-unit`);
-             if (unit) unit.style.display = 'none';
-        }
     }
 
 
@@ -359,6 +356,7 @@ class OnlinePVPGame {
     gameLoop(timestamp) {
         if (!this.gameRunning) return;
         
+        this.handlePlayerInput(); // 入力状態をサーバーに送信
         this.drawGame();
         this.updateDOM();
         
@@ -369,11 +367,15 @@ class OnlinePVPGame {
         if (!this.territoryMap) return;
 
         // 1. マップ（Canvas）の描画
-        for (let y = 0; y < this.HEIGHT / this.PIXEL_SIZE; y++) {
-            for (let x = 0; x < this.WIDTH / this.PIXEL_SIZE; x++) {
+        const cellCountX = this.WIDTH / this.PIXEL_SIZE;
+        const cellCountY = this.HEIGHT / this.PIXEL_SIZE;
+
+        for (let y = 0; y < cellCountY; y++) {
+            for (let x = 0; x < cellCountX; x++) {
                 const mapKey = `${x},${y}`;
                 const color = this.territoryMap[mapKey];
                 
+                // 塗りつぶされていない部分は白で描画
                 this.ctx.fillStyle = color || '#ffffff';
                 this.ctx.fillRect(
                     x * this.PIXEL_SIZE, 
@@ -402,80 +404,86 @@ class OnlinePVPGame {
         const seconds = (remainingTime / 1000).toFixed(2);
         this.timerDisplay.textContent = `残り時間: ${seconds}秒`;
         
-        // --- スコア/ゲージ更新 ---
-        const scores = this.calculateScores();
-        
-        this.scoreP1Display.textContent = scores.player1.score;
-        this.scoreP2Display.textContent = scores.player2.score;
-
-        const totalScore = scores.player1.score + scores.player2.score;
-        const p1Width = totalScore > 0 ? (scores.player1.score / totalScore) * 100 : 50;
-        const p2Width = totalScore > 0 ? (scores.player2.score / totalScore) * 100 : 50;
-
-        this.scoreGaugeP1.style.width = `${p1Width}%`;
-        this.scoreGaugeP2.style.width = `${p2Width}%`;
+        // --- スコア/ゲージ/ボード更新 ---
+        this.updateScoreDisplay();
         
         // --- ステータスメッセージ ---
         this.statusMessage.textContent = this.gameRunning ? 
-            `${this.players[this.playerId]?.isDead ? '💀 敗退' : '走行中'}` : 
+            `操作: WASD/GamePad | Your ID: ${this.playerId}` : 
             'ゲーム終了！';
     }
     
-    calculateScores() {
-        // プレイヤーIDの並び順に基づいてスコアを計算
-        const playerKeys = Object.keys(this.players).sort();
+    updateScoreDisplay() {
+        const activePlayers = Object.values(this.players);
         
-        const scores = {
-            player1: { id: playerKeys[0], color: this.players[playerKeys[0]]?.color, score: 0 },
-            player2: { id: playerKeys[1], color: this.players[playerKeys[1]]?.color, score: 0 },
-        };
+        // スコアリストをスコア降順でソート
+        activePlayers.sort((a, b) => b.score - a.score);
         
-        // スコア計算はクライアントでなくサーバーが厳密に行うべきだが、
-        // クライアントの表示用として、サーバーから受け取ったマップに基づき計算
-        for (const color of Object.values(this.territoryMap || {})) {
-            if (color === scores.player1.color) {
-                scores.player1.score++;
-            } else if (color === scores.player2.color) {
-                scores.player2.score++;
-            }
-        }
-        
-        // スコア表示の対応付け (P1/P2表示に合わせる)
-        const p1ScoreElem = this.scoreP1Display.closest('.player-score');
-        const p2ScoreElem = this.scoreP2Display.closest('.player-score');
-        
-        if (playerKeys.length >= 1) {
-             p1ScoreElem.style.color = scores.player1.color;
-             this.scoreGaugeP1.style.backgroundColor = scores.player1.color;
-        }
-        if (playerKeys.length >= 2) {
-             p2ScoreElem.style.color = scores.player2.color;
-             this.scoreGaugeP2.style.backgroundColor = scores.player2.color;
-        }
+        // 1. スコアボード (リスト表示)
+        this.scoreBoardList.innerHTML = '';
+        activePlayers.forEach(p => {
+            const item = document.createElement('p');
+            item.className = 'player-score-item';
+            item.style.color = p.color;
+            item.textContent = `${p.id}: ${p.score}`;
+            this.scoreBoardList.appendChild(item);
+        });
 
-        return scores;
+        // 2. スコアゲージ (動的な多色表示)
+        this.scoreGaugeContainer.innerHTML = '';
+        let totalScore = activePlayers.reduce((sum, p) => sum + p.score, 0);
+        let totalCells = (this.WIDTH / this.PIXEL_SIZE) * (this.HEIGHT / this.PIXEL_SIZE);
+        
+        // 未塗りつぶし領域のスコアを計算 (合計塗りつぶしセル数 / 全セル数)
+        const totalPaintedCells = Object.keys(this.territoryMap || {}).length;
+        const unpaintedScore = Math.max(0, totalCells - totalPaintedCells);
+
+        // 塗りつぶされた領域がない場合、ゲージは表示しない (またはデフォルト表示)
+        if (totalPaintedCells === 0) {
+            this.scoreGaugeContainer.style.background = '#eee'; // 全体が未塗りつぶし
+            return;
+        }
+        
+        // ゲージセグメントの挿入 (スコアが高い順)
+        activePlayers.forEach(p => {
+            if (p.score > 0) {
+                const widthPercent = (p.score / totalPaintedCells) * 100;
+                const segment = document.createElement('div');
+                segment.className = 'player-gauge-segment';
+                segment.style.width = `${widthPercent}%`;
+                segment.style.backgroundColor = p.color;
+                this.scoreGaugeContainer.appendChild(segment);
+            }
+        });
     }
 
     endGame(winnerId) {
         this.gameRunning = false;
         
-        const scores = this.calculateScores();
-        const p1Score = scores.player1.score;
-        const p2Score = scores.player2.score;
+        // 最終スコアリストの作成
+        this.finalScoreList.innerHTML = '';
+        const finalPlayers = Object.values(this.players);
+        finalPlayers.sort((a, b) => b.score - a.score); // スコア降順
+        
+        finalPlayers.forEach((p, index) => {
+            const rank = index + 1;
+            const item = document.createElement('p');
+            item.style.color = p.color;
+            item.style.fontWeight = 'bold';
+            item.innerHTML = `**#${rank}** - ${p.id}: ${p.score}pt`;
+            this.finalScoreList.appendChild(item);
+        });
         
         let winnerMessage = '';
-        if (p1Score > p2Score) {
-            winnerMessage = `${scores.player1.id} WIN!`;
-        } else if (p2Score > p1Score) {
-            winnerMessage = `${scores.player2.id} WIN!`;
-        } else {
+        if (winnerId === 'DRAW') {
             winnerMessage = 'DRAW!';
+        } else {
+            const winner = finalPlayers.find(p => p.id === winnerId);
+            winnerMessage = `${winnerId} WIN!`;
+            this.finalScoreList.querySelector('p').style.fontSize = '1.4em';
         }
         
-        this.statusMessage.textContent = `試合終了！ ${winnerMessage}`;
         this.victoryMessage.textContent = winnerMessage;
-        this.finalScoreP1Display.textContent = p1Score;
-        this.finalScoreP2Display.textContent = p2Score;
         
         this.victoryScreen.classList.add('active');
         this.victoryScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
@@ -484,24 +492,45 @@ class OnlinePVPGame {
 
 
     // --- 入力/操作 ---
-    handleKeyboardInput(event) {
+    handlePlayerInput() {
         if (this.currentScreen !== 'game' || !this.gameRunning) return;
-
-        let dx = 0, dy = 0;
-        switch (event.code) {
-            case 'KeyW': case 'ArrowUp':    dy = -this.MOVE_SPEED; break;
-            case 'KeyS': case 'ArrowDown':  dy = this.MOVE_SPEED;  break;
-            case 'KeyA': case 'ArrowLeft':  dx = -this.MOVE_SPEED; break;
-            case 'KeyD': case 'ArrowRight': dx = this.MOVE_SPEED;  break;
-            default: return;
-        }
-        event.preventDefault(); 
         
         const now = performance.now();
         if (now - this.lastMoveTime < this.moveDelay) return;
         this.lastMoveTime = now;
+        
+        let dx = 0, dy = 0;
+        
+        // 1. キーボード入力
+        if (this.keyStates['w'] || this.keyStates['up']) dy = -this.MOVE_SPEED;
+        if (this.keyStates['s'] || this.keyStates['down']) dy = this.MOVE_SPEED;
+        if (this.keyStates['a'] || this.keyStates['left']) dx = -this.MOVE_SPEED;
+        if (this.keyStates['d'] || this.keyStates['right']) dx = this.MOVE_SPEED;
+        
+        // 2. ゲームパッド入力
+        const gamepads = navigator.getGamepads();
+        const gamepad = gamepads[0]; // 常に最初のゲームパッドを使用
+        
+        if (gamepad) {
+            const moveThreshold = 0.3; 
+            
+            // スティック
+            const axisX = gamepad.axes[0] || 0;
+            const axisY = gamepad.axes[1] || 0;
 
-        this.requestMove(dx, dy);
+            if (Math.abs(axisX) > moveThreshold) dx = Math.round(axisX * this.MOVE_SPEED * 2); 
+            if (Math.abs(axisY) > moveThreshold) dy = Math.round(axisY * this.MOVE_SPEED * 2);
+
+            // 十字キー (十字キーが押されている場合はスティックより優先)
+            if (gamepad.buttons[12]?.pressed) dy = -this.MOVE_SPEED;
+            else if (gamepad.buttons[13]?.pressed) dy = this.MOVE_SPEED;
+            else if (gamepad.buttons[14]?.pressed) dx = -this.MOVE_SPEED;
+            else if (gamepad.buttons[15]?.pressed) dx = this.MOVE_SPEED;
+        }
+
+        if (dx !== 0 || dy !== 0) {
+            this.requestMove(dx, dy);
+        }
     }
     
     requestMove(dx, dy) {
@@ -511,80 +540,30 @@ class OnlinePVPGame {
                 dx: dx,
                 dy: dy
             }));
-            // クライアント側では位置を更新せず、サーバーからの応答を待つ
         }
     }
     
-    // --- ゲームパッド処理 (前回と同じロジックを使用) ---
+    // --- ゲームパッドポーリング (前回と同じ) ---
     startGamepadPolling() {
-        if (this.gamepadInterval) return;
-        this.gamepadInterval = setInterval(() => {
-            this.pollGamepads();
-        }, 1000 / 60); 
+        // requestAnimationFrame内でゲームパッド入力を処理するため、ポーリングは不要
+        // gamepadconnected/disconnectedイベントの処理のみ残す
+        window.addEventListener("gamepadconnected", () => this.updateGamepadStatus());
+        window.addEventListener("gamepaddisconnected", () => this.updateGamepadStatus());
+        this.updateGamepadStatus();
     }
 
     updateGamepadStatus() {
+        // ステータス表示はシンプルにする
         const gamepads = navigator.getGamepads();
         let connectedCount = 0;
+        for (const gp of gamepads) {
+            if (gp) connectedCount++;
+        }
         
-        if (gamepads[0]) connectedCount++;
-        if (gamepads[1]) connectedCount++; 
-
+        document.getElementById('status-message').style.color = connectedCount > 0 ? '#2ecc71' : '#f1c40f';
         document.getElementById('status-message').textContent = connectedCount > 0 ? 
-            `${connectedCount}台のコントローラーが接続済み` : 
-            'コントローラーを接続してください...';
-        
-        document.getElementById('status-message').style.color = connectedCount > 0 ? '#2ecc71' : '#e74c3c';
-        
-        if (connectedCount >= 2 && this.currentScreen === 'title') {
-             // 接続状態をチェックしているstatus-messageを操作情報表示と統合したため、ここでは特別な処理は不要
-        }
-    }
-
-    pollGamepads() {
-        if (this.currentScreen !== 'game' || !this.gameRunning) return;
-
-        const gamepads = navigator.getGamepads();
-        const now = performance.now();
-
-        // P1（Gamepad 0）の入力処理
-        if (gamepads[0]) {
-             this.handleGamepadInput(gamepads[0], now);
-        }
-        // P2（Gamepad 1）の入力処理 (現在は1人しか操作できないため省略。2人目の実装はサーバーのプレイヤーIDと紐付ける必要あり)
-        // if (gamepads[1]) {
-        //     this.handleGamepadInput(gamepads[1], now);
-        // }
-    }
-
-    handleGamepadInput(gamepad, now) {
-        if (!gamepad) return;
-        if (now - this.lastMoveTime < this.moveDelay) return;
-        
-        const MOVE_SPEED = this.MOVE_SPEED;
-        const moveThreshold = 0.3; // スティックの遊び
-
-        let dx = 0, dy = 0;
-
-        // 十字キー
-        if (gamepad.buttons[12]?.pressed) dy = -MOVE_SPEED;
-        else if (gamepad.buttons[13]?.pressed) dy = MOVE_SPEED;
-        else if (gamepad.buttons[14]?.pressed) dx = -MOVE_SPEED;
-        else if (gamepad.buttons[15]?.pressed) dx = MOVE_SPEED;
-        
-        // 左スティック
-        const axisX = gamepad.axes[0] || 0;
-        const axisY = gamepad.axes[1] || 0;
-
-        if (dx === 0 && dy === 0) {
-            if (Math.abs(axisX) > moveThreshold) dx = Math.round(axisX * MOVE_SPEED * 2); 
-            if (Math.abs(axisY) > moveThreshold) dy = Math.round(axisY * MOVE_SPEED * 2);
-        }
-
-        if (dx !== 0 || dy !== 0) {
-            this.lastMoveTime = now;
-            this.requestMove(dx, dy);
-        }
+            `WASD/ゲームパッド (${connectedCount}台) で操作 | Your ID: ${this.playerId}` : 
+            'WASDまたはゲームパッドを接続してください';
     }
 }
 
