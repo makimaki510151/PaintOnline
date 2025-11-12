@@ -6,11 +6,18 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+// CORS設定を緩和し、ローカルIPやngrokからの接続を許可
+const io = new Server(server, {
+    cors: {
+        origin: "*", // すべてのオリジンからの接続を許可
+        methods: ["GET", "POST"]
+    }
+});
 
 const PORT = 8000;
 
 // クライアントにファイルを提供
+// index.html, script.js, style.css を提供するために必須
 app.use(express.static(path.join(__dirname)));
 
 // --- ゲーム設定 ---
@@ -59,7 +66,7 @@ function initializeMap() {
 
 function startGame() {
     const activePlayers = Object.values(players);
-    if (gameRunning || activePlayers.length < 1) return; // 1人でも開始可能（テスト用）
+    if (gameRunning || activePlayers.length < 1) return;
 
     initializeMap();
     gameRunning = true;
@@ -135,7 +142,8 @@ function updatePlayerList() {
         id: p.id,
         color: p.color,
         isHost: p.isHost,
-        mapValue: p.mapValue
+        mapValue: p.mapValue,
+        socketId: p.socketId
     }));
     io.emit('playerListUpdate', { 
         players: playerList, 
@@ -146,6 +154,7 @@ function updatePlayerList() {
 
 function getAvailableColors() {
     const takenColors = Object.values(players).map(p => p.color);
+    // PLAYER_COLORSのうち、takenColorsに含まれていない色
     return PLAYER_COLORS.filter(color => !takenColors.includes(color));
 }
 
@@ -188,21 +197,19 @@ io.on('connection', (socket) => {
         if (gameRunning) return;
 
         const available = getAvailableColors();
-        if (available.includes(selectedColor)) {
-            // 他のプレイヤーからその色を削除
-            Object.values(players).forEach(p => {
-                if (p.color === selectedColor) {
-                    // 色を奪われたプレイヤーに新しい色を割り当てる
-                    const nextAvailable = PLAYER_COLORS.find(c => c !== selectedColor && getAvailableColors().includes(c));
-                    p.color = nextAvailable || PLAYER_COLORS[0]; // デフォルト色
-                    io.to(p.socketId).emit('colorUpdated', p.color);
-                }
-            });
+        const currentPlayer = players[socket.id];
 
-            // 自分の色を更新
-            players[socket.id].color = selectedColor;
+        // 選択された色が現在利用可能か
+        if (available.includes(selectedColor)) {
+            // 現在の色を解放する
+            const oldColor = currentPlayer.color;
+            currentPlayer.color = selectedColor;
             
+            // colorUpdatedイベントは不要 (playerListUpdateで色が更新される)
             updatePlayerList();
+        } else if (currentPlayer.color === selectedColor) {
+            // 既に選択している色を再度選択した場合は何もしない
+            return;
         } else {
             // 既に使われている色
             socket.emit('colorSelectionFailed', 'その色は既に他のプレイヤーに使用されています。');
@@ -258,9 +265,11 @@ io.on('connection', (socket) => {
         
         // ホストが切断した場合、次の接続者をホストに設定
         if (socket.id === hostId) {
-            hostId = Object.keys(players)[0] || null;
+            const playerIds = Object.keys(players);
+            hostId = playerIds[0] || null;
             if (hostId) {
                 players[hostId].isHost = true;
+                // 新しいホストにホスト権限を通知
                 io.to(hostId).emit('isHost', true);
             }
         }
@@ -277,5 +286,5 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`ngrok http ${PORT} で公開してください。`);
+    console.log(`参加者はこのPCのローカルIPアドレスとポート ${PORT} でアクセスしてください。`);
 });
