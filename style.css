@@ -1,0 +1,281 @@
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    background-color: #2c3e50;
+    font-family: Arial, sans-serif;
+    color: #ecf0f1;
+    overflow: hidden;
+}
+
+.game-container {
+    text-align: center;
+    background-color: #34495e;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    position: relative;
+    z-index: 1;
+    width: 840px; /* ロビーの幅に合わせる */
+}
+
+h1 {
+    color: #f1c40f;
+    margin-bottom: 20px;
+}
+
+/* ロビー画面のスタイル */
+.lobby-screen {
+    padding: 20px;
+    background-color: #2c3e50;
+    border-radius: 8px;
+    transition: opacity 0.5s;
+    display: none;
+}
+
+.lobby-screen.show {
+    display: block;
+}
+
+#connection-info {
+    margin-bottom: 20px;
+}
+
+#serverIp {
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    width: 300px;
+    margin-right: 10px;
+    color: #333;
+}
+
+#connectButton {
+    padding: 8px 15px;
+    background-color: #2ecc71;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.color-selection {
+    margin: 20px 0;
+    padding: 15px;
+    border: 1px solid #7f8c8d;
+    border-radius: 5px;
+}
+
+#colorPalette {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.color-option {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.color-option.selected {
+    border-color: #f1c40f;
+}
+
+.color-option.taken {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-color: #e74c3c;
+}
+
+#playerList {
+    list-style: none;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #7f8c8d;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+#playerList li {
+    padding: 8px 15px;
+    border-bottom: 1px solid #34495e;
+    display: flex;
+    justify-content: space-between;
+}
+
+#playerList li:last-child {
+    border-bottom: none;
+}
+
+.player-color-indicator {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    margin-right: 10px;
+    border: 1px solid #ecf0f1;
+}
+
+/* ゲーム画面のスタイル */
+.game-screen {
+    display: none; /* 初期状態では非表示 */
+}
+
+.info-bar {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.game-board-wrapper {
+    position: relative;
+    width: 800px; 
+    height: 600px; 
+    margin: 0 auto;
+}
+
+#gameCanvas {
+    background-color: #ffffff;
+    border: 3px solid #f1c40f;
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.score-board {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+}
+
+.player-score {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.p1 { color: #e74c3c; } /* P1はデフォルトで赤 */
+.p2 { color: #3498db; } /* P2はデフォルトで青 */
+
+#startButton {
+    padding: 10px 20px;
+    font-size: 1.2em;
+    background-color: #f1c40f;
+    color: #34495e;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 15px;
+    transition: background-color 0.3s ease;
+}
+
+#startButton:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+}
+
+#startButton:not(:disabled):hover {
+    background-color: #f39c12;
+}
+
+/* プレイヤーユニットのスタイル (DOM要素ではなくCanvasで描画するため、JS版で削除した要素) */
+/* .player-unit { ... } */
+
+/* 勝利画面のスタイル (変更なし) */
+.victory-screen {
+    /* ... (省略) ... */
+    position: fixed; 
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.8); 
+    z-index: 10;
+    opacity: 0; 
+    visibility: hidden;
+    transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.victory-screen.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.victory-screen.p1-win { background-color: rgba(231, 76, 60, 0.9); }
+.victory-screen.p2-win { background-color: rgba(52, 152, 219, 0.9); }
+
+.victory-content {
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 40px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+    animation: fadeInScale 0.7s ease forwards;
+}
+
+@keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+#victoryMessage {
+    font-size: 4em;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 20px;
+    text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.final-score {
+    font-size: 2em;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+#restartButton {
+    padding: 15px 30px;
+    font-size: 1.5em;
+    background-color: #f1c40f;
+    color: #34495e;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-top: 30px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+#restartButton:hover {
+    background-color: #f39c12;
+    transform: translateY(-2px);
+}
+
+/* スコアゲージのスタイル */
+.score-gauge-container {
+    width: 800px;
+    height: 20px;
+    background-color: #555;
+    margin: 15px auto 10px;
+    display: flex;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4);
+}
+
+.score-gauge {
+    height: 100%;
+    transition: width 0.3s ease-out;
+}
+
+.score-gauge.p1 { background-color: #e74c3c; }
+.score-gauge.p2 { background-color: #3498db; }
