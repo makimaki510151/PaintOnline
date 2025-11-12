@@ -6,7 +6,7 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-// CORS設定を緩和し、ローカルIPやngrokからの接続を許可
+// GitHub Pagesなど、異なるドメインからの接続を許可するためにCORSを設定
 const io = new Server(server, {
     cors: {
         origin: "*", // すべてのオリジンからの接続を許可
@@ -16,8 +16,8 @@ const io = new Server(server, {
 
 const PORT = 8000;
 
-// クライアントにファイルを提供
-// index.html, script.js, style.css を提供するために必須
+// クライアントに静的ファイル（index.html, script.js, style.css）を提供
+// 参加者がサーバーのURLにアクセスしたときにコンテンツを提供するために使用
 app.use(express.static(path.join(__dirname)));
 
 // --- ゲーム設定 ---
@@ -202,10 +202,8 @@ io.on('connection', (socket) => {
         // 選択された色が現在利用可能か
         if (available.includes(selectedColor)) {
             // 現在の色を解放する
-            const oldColor = currentPlayer.color;
             currentPlayer.color = selectedColor;
             
-            // colorUpdatedイベントは不要 (playerListUpdateで色が更新される)
             updatePlayerList();
         } else if (currentPlayer.color === selectedColor) {
             // 既に選択している色を再度選択した場合は何もしない
@@ -286,5 +284,5 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`参加者はこのPCのローカルIPアドレスとポート ${PORT} でアクセスしてください。`);
+    console.log(`【重要】参加者には、このサーバーの公開URL（例: ngrok-url.app:8000 など）を伝えてください。`);
 });

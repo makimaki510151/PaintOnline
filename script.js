@@ -1,4 +1,5 @@
-// script.js (8人・ロビー対応版)
+// script.js (接続修正版)
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM要素 ---
     const canvas = document.getElementById('gameCanvas');
@@ -37,52 +38,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- クライアント側の状態 ---
     let socket = null;
     let myPlayer = null; 
-    let allPlayers = {}; // { socketId: { ... } }
+    let allPlayers = {}; // { id: { ... } }
     let gamepads = [];
     let gameRunning = false;
     let animationFrameId = null; 
+    let gameMap = [];
     let mapColors = {}; // { mapValue: color }
     
     // --- 初期化 ---
     function initializeMap() {
         const rows = HEIGHT / PIXEL_SIZE;
         const cols = WIDTH / PIXEL_SIZE;
-        let map = [];
+        gameMap = [];
         for (let i = 0; i < rows; i++) {
-            map[i] = new Array(cols).fill(0);
+            gameMap[i] = new Array(cols).fill(0);
         }
         ctx.fillStyle = INITIAL_COLOR;
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
-        return map;
     }
-
-    // --- 接続ロジック ---
-    connectButton.addEventListener('click', () => {
-        const serverUrl = serverIpInput.value.trim();
-        if (!serverUrl) {
-            alert('サーバーIPまたはURLを入力してください。');
-            return;
-        }
-
-        // 既存の接続があれば切断
-        if (socket) {
-            socket.disconnect();
-        }
-
-        // Socket.IO接続を確立
-        try {
-            lobbyStatus.textContent = '接続中...';
-            socket = io(`http://${serverUrl}`, {
-                transports: ['websocket', 'polling'],
-                forceNew: true // 新しい接続を強制
-            });
-            setupSocketEvents(socket);
-        } catch (error) {
-            lobbyStatus.textContent = '接続に失敗しました。';
-            console.error('Connection error:', error);
-        }
-    });
-
+    
     // --- UI/ロビーの操作 ---
 
     function createColorPalette() {
@@ -93,8 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
             option.style.backgroundColor = color;
             option.dataset.color = color;
             option.addEventListener('click', () => {
-                if (option.classList.contains('taken')) return;
-                socket.emit('selectColor', color);
+                if (socket && socket.connected && !option.classList.contains('taken')) {
+                    socket.emit('selectColor', color);
+                }
             });
             colorPalette.appendChild(option);
         });
@@ -105,6 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
         playerListElement.innerHTML = '';
 
         const colorOptions = colorPalette.querySelectorAll('.color-option');
+        
+        // 1. パレットの状態を更新
         colorOptions.forEach(opt => {
             opt.classList.remove('taken', 'selected');
             opt.style.opacity = '1';
@@ -116,8 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
+        // 2. 参加者リストとマップカラーを更新
+        mapColors = {};
         playersData.forEach(p => {
-            // 参加者リストの更新
+            // 参加者リストの作成
             const listItem = document.createElement('li');
             listItem.innerHTML = `
                 <div style="display: flex; align-items: center;">
@@ -128,7 +107,9 @@ document.addEventListener('DOMContentLoaded', () => {
             playerListElement.appendChild(listItem);
 
             // 自分の色をパレットに反映
-            if (myPlayer && p.id === myPlayer.id) {
+            if (myPlayer && p.socketId === socket.id) {
+                myPlayer.color = p.color; // サーバーからの最終確定色に更新
+                myPlayer.isHost = p.isHost;
                 currentColorDisplay.textContent = p.color;
                 const myColorOption = colorPalette.querySelector(`[data-color="${p.color}"]`);
                 if (myColorOption) {
@@ -140,9 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
             mapColors[p.mapValue] = p.color;
         });
         
-        // ホストにのみスタートボタンの操作権限
-        if (myPlayer && myPlayer.isHost) {
-            startButton.disabled = playersData.length < 1; // 1人でも開始可能
+        // 3. ホストにのみスタートボタンの操作権限
+        if (myPlayer && myPlayer.isHost) { 
+            startButton.disabled = playersData.length < 1; 
             startButton.style.display = 'inline-block';
             lobbyStatus.textContent = `${playersData.length}人が待機中。準備ができたらスタートを押してください。`;
         } else {
@@ -174,7 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function drawPlayers() {
-        // 全プレイヤーの情報を描画
         const playersArray = Object.values(allPlayers);
 
         playersArray.forEach(player => {
@@ -184,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillStyle = player.color;
             ctx.fill();
             
-            // プレイヤーIDを表示 (デバッグ用)
+            // プレイヤーIDを表示
             ctx.fillStyle = 'white';
             ctx.font = '10px Arial';
             ctx.textAlign = 'center';
@@ -198,12 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // 1. 入力処理
-        if (myPlayer) {
+        if (myPlayer && socket && socket.connected) {
             handleInput();
         }
         
-        // 2. 描画
         drawMap(); 
         drawPlayers();
 
@@ -213,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- ゲームパッドの処理 ---
     function handleInput() {
         gamepads = navigator.getGamepads().filter(g => g !== null);
-        const myGamepad = gamepads[0]; // 誰でも最初のコントローラーを使う
+        const myGamepad = gamepads[0]; 
 
         if (!myGamepad) return;
 
@@ -226,13 +204,49 @@ document.addEventListener('DOMContentLoaded', () => {
         if (Math.abs(axisY) > deadzone) { moveY = axisY * MOVE_SPEED; }
         
         if (moveX !== 0 || moveY !== 0) {
-            // クライアント側で移動を予測し、サーバーに送信
+            // クライアント側で移動を予測
             myPlayer.x = Math.max(0, Math.min(WIDTH, myPlayer.x + moveX));
             myPlayer.y = Math.max(0, Math.min(HEIGHT, myPlayer.y + moveY));
             
             socket.emit('playerMove', { x: myPlayer.x, y: myPlayer.y });
         }
     }
+
+    // --- 接続ロジック ---
+    connectButton.addEventListener('click', () => {
+        const serverUrl = serverIpInput.value.trim();
+        if (!serverUrl) {
+            alert('サーバーIPまたはURLを入力してください。');
+            return;
+        }
+
+        if (socket && socket.connected) {
+            socket.disconnect();
+        }
+
+        // GitHub Pagesではここでエラーが出るが、ioが定義されていれば接続に進む
+        if (typeof io !== 'function') {
+            lobbyStatus.textContent = 'エラー: Socket.IOライブラリが読み込まれていません。サーバーが起動しているか確認してください。';
+            console.error('io is not defined. Check if /socket.io/socket.io.js loaded successfully.');
+            return;
+        }
+        
+        try {
+            lobbyStatus.textContent = '接続中...';
+            // http:// または https:// がなければ自動で http:// を付加
+            const protocol = serverUrl.startsWith('https://') ? '' : serverUrl.startsWith('http://') ? '' : 'http://';
+            
+            // 入力された絶対URLに対して接続を試みる
+            socket = io(`${protocol}${serverUrl}`, {
+                transports: ['websocket', 'polling'],
+                forceNew: true 
+            });
+            setupSocketEvents(socket);
+        } catch (error) {
+            lobbyStatus.textContent = '接続に失敗しました。';
+            console.error('Connection error:', error);
+        }
+    });
 
     // --- Socket.IO イベントハンドラ設定 ---
     function setupSocketEvents(socket) {
@@ -264,7 +278,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // 自分のプレイヤー情報を受信
         socket.on('playerAssigned', (playerData) => {
             myPlayer = playerData;
-            myPlayer.isHost = playerData.isHost;
             lobbyStatus.textContent = `P${myPlayer.id}として接続しました。${myPlayer.isHost ? 'あなたはホストです。' : ''}`;
         });
         
@@ -277,25 +290,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 全プレイヤー情報とロビー状態の更新
         socket.on('playerListUpdate', (data) => {
-            // allPlayersはサーバーの状態をミラーリング
             allPlayers = {};
             data.players.forEach(p => {
-                allPlayers[p.id] = p; // IDベースで保存
+                allPlayers[p.id] = p; 
             });
             updateLobby(data.players, data.hostId, data.availableColors);
         });
         
-        // 自分の色の更新
-        socket.on('colorUpdated', (newColor) => {
-            if (myPlayer) {
-                myPlayer.color = newColor;
-                currentColorDisplay.textContent = newColor;
-            }
-        });
-
         // ゲーム開始通知
         socket.on('gameStart', (data) => {
-            gameMap = initializeMap(); // ローカルマップをリセット
+            initializeMap(); 
             gameRunning = true;
             
             // サーバーの初期状態を反映
@@ -304,6 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(p.socketId === socket.id) {
                     myPlayer.x = p.x;
                     myPlayer.y = p.y;
+                    myPlayer.mapValue = p.mapValue;
                 }
             });
 
@@ -320,7 +325,6 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.values(data.players).forEach(p => {
                 allPlayers[p.id] = p;
                 if (p.socketId === socket.id) {
-                    // 自分の位置をサーバーに同期
                     myPlayer.x = p.x;
                     myPlayer.y = p.y;
                 }
@@ -350,8 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let p1Width = totalPaintedTiles > 0 ? (p1Score / totalPaintedTiles) * 100 : 50;
             scoreGaugeP1.style.width = `${p1Width}%`;
             scoreGaugeP2.style.width = `${100 - p1Width}%`;
-            
-            // TODO: 8人用スコアボードの更新
         });
         
         // タイマーの更新
@@ -375,9 +377,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (sortedScores.length > 0 && sortedScores[0].score > 0) {
                 const winnerId = sortedScores[0].mapValue;
-                const winnerPlayer = Object.values(allPlayers).find(p => p.mapValue === winnerId);
                 winnerMessage = `P${winnerId} WIN!`;
-                winnerClass = `p${winnerId === 1 ? '1' : winnerId === 2 ? '2' : ''}-win`; // P1, P2のみ色を適用
+                winnerClass = `p${winnerId === 1 ? '1' : winnerId === 2 ? '2' : ''}-win`; 
             } else {
                 winnerMessage = 'DRAW!';
             }
@@ -394,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             lobbyScreen.classList.add('show');
             gameScreen.style.display = 'none';
+            startButton.disabled = false;
         });
 
         // ゲーム強制終了通知
@@ -402,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
             gameRunning = false;
             lobbyScreen.classList.add('show');
             gameScreen.style.display = 'none';
-            // 再接続処理を促す
+            startButton.disabled = true;
         });
     }
 
@@ -421,12 +423,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // ホストではない場合、ロビーに戻る
             lobbyScreen.classList.add('show');
             gameScreen.style.display = 'none';
-            // P1の開始を待つメッセージを表示
         }
     });
     
     // 初回実行
     createColorPalette();
-    // IP入力欄に接続を促す
-    lobbyStatus.textContent = 'IP/URLを入力して「接続」を押してください。';
 });

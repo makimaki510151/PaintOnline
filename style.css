@@ -18,7 +18,7 @@ body {
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
     position: relative;
     z-index: 1;
-    width: 840px; /* ロビーの幅に合わせる */
+    width: 840px; 
 }
 
 h1 {
@@ -41,14 +41,17 @@ h1 {
 
 #connection-info {
     margin-bottom: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #serverIp {
     padding: 8px;
     border: none;
     border-radius: 4px;
-    width: 300px;
-    margin-right: 10px;
+    width: 280px;
+    margin: 0 10px;
     color: #333;
 }
 
@@ -81,7 +84,7 @@ h1 {
     border-radius: 50%;
     cursor: pointer;
     border: 3px solid transparent;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, opacity 0.2s;
 }
 
 .color-option.selected {
@@ -102,6 +105,7 @@ h1 {
     border: 1px solid #7f8c8d;
     border-radius: 5px;
     margin-top: 10px;
+    text-align: left;
 }
 
 #playerList li {
@@ -126,7 +130,7 @@ h1 {
 
 /* ゲーム画面のスタイル */
 .game-screen {
-    display: none; /* 初期状態では非表示 */
+    display: none; 
 }
 
 .info-bar {
@@ -162,8 +166,8 @@ h1 {
     font-weight: bold;
 }
 
-.p1 { color: #e74c3c; } /* P1はデフォルトで赤 */
-.p2 { color: #3498db; } /* P2はデフォルトで青 */
+.p1 { color: #e74c3c; } 
+.p2 { color: #3498db; } 
 
 #startButton {
     padding: 10px 20px;
@@ -186,12 +190,8 @@ h1 {
     background-color: #f39c12;
 }
 
-/* プレイヤーユニットのスタイル (DOM要素ではなくCanvasで描画するため、JS版で削除した要素) */
-/* .player-unit { ... } */
-
-/* 勝利画面のスタイル (変更なし) */
+/* 勝利画面のスタイル */
 .victory-screen {
-    /* ... (省略) ... */
     position: fixed; 
     top: 0;
     left: 0;
