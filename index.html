@@ -3,69 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Color Territory PVP (Online)</title>
+    <title>オンライン迷路レース</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
-        <h1>カラーテリトリー PVP (Online)</h1>
-        
-        <div id="lobbyScreen" class="lobby-screen show">
-            <h2>🌐 オンラインロビー</h2>
-            <p id="lobby-status">IP/URLを入力して「接続」を押してください。</p>
-            <div id="connection-info">
-                <label for="serverIp">サーバーIP/URL:</label>
-                <input type="text" id="serverIp" value="" placeholder="例: xxxxx.ngrok-free.app:8000">
-                <button id="connectButton">接続</button>
+    
+    <div id="connection-modal" class="screen">
+        <div class="title-container">
+            <h2 id="connection-title">部屋に参加</h2>
+            <p style="margin-bottom: 10px;"> 
+                **ngrokを使用する場合**: 「ホスト名」（例: `random-id.ngrok-free.app`）を、ローカル接続の場合は「ホスト名:ポート番号」を入力してください。
+            </p>
+            <div class="input-group" style="margin-bottom: 25px;">
+                <label for="server-address">接続アドレス:</label>
+                <input type="text" id="server-address" placeholder="例: massive-yak-4422.ngrok-free.app または localhost:8080">
+            </div>
+            <button id="connect-submit" class="menu-button">接続して参加</button>
+            <button id="connection-cancel" class="menu-button small" style="background: gray; margin-top: 10px;">キャンセル</button>
+        </div>
+    </div>
+    
+    <div id="title-screen" class="screen active">
+        <div class="title-container">
+            <h1>2P迷路レース</h1>
+            <div style="margin-top: 40px; display: flex; flex-direction: column; gap: 15px;">
+                <button id="create-room-button" class="menu-button">部屋を作成 (ホスト)</button>
+                <button id="join-room-button" class="menu-button">部屋に参加 (ゲスト)</button>
+            </div>
+            <div id="connection-status" style="margin-top: 20px; font-weight: bold; color: #764ba2;">未接続</div>
+        </div>
+    </div>
+
+    <div id="lobby-screen" class="screen">
+        <div class="title-container" style="max-width: 600px;">
+            <h2>準備部屋 (Lobby)</h2>
+            <div id="lobby-player-list" style="text-align: left; margin-top: 20px; min-height: 100px;">
+                </div>
+            <p id="lobby-message" style="font-weight: bold; color: #F44336; margin: 20px 0;">ホストの操作を待っています...</p>
+            <button id="start-game-button" class="menu-button" style="display: none; margin-top: 10px;">ゲーム開始</button>
+            <button id="lobby-disconnect-button" class="menu-button small" style="background: gray; margin-top: 20px;">切断してタイトルに戻る</button>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div class="game-container">
+            <div class="game-header">
+                <button id="back-to-title" class="menu-button small">タイトルに戻る</button>
+                <span id="current-level">65x65 対戦レース</span>
             </div>
             
-            <div id="colorSelection" class="color-selection">
-                <h3>🎨 色を選択してください (P1〜P8)</h3>
-                <div id="colorPalette">
+            <div class="game-main-tri-view">
+                
+                <div class="player-view-container my-view">
+                    <h3 id="my-view-title">PLAYER X (YOUR VIEW: 5x5)</h3>
+                    <canvas id="my-canvas" class="player-canvas" width="450" height="450"></canvas>
+                </div>
+
+                <div class="center-panel">
+                    <h3>全体マップ (探索済み通路)</h3>
+                    <div class="maze-container">
+                        <canvas id="minimap-canvas" width="450" height="450"></canvas> 
                     </div>
-                <p id="myColorDisplay">選択中の色: <span id="currentColor">未接続</span></p>
-            </div>
-            
-            <h3>👤 参加者リスト (<span id="playerCount">0</span>/8)</h3>
-            <ul id="playerList">
-                </ul>
-            
-            <button id="startButton" disabled>ゲームスタート (ホストのみ)</button>
-        </div>
-        
-        <div id="gameScreen" class="game-screen">
-            <div class="info-bar">
-                <p id="status-message">ゲーム中...</p>
-                <p id="timer">残り時間: 60.00秒</p>
-            </div>
-            
-            <div class="game-board-wrapper">
-                <canvas id="gameCanvas" width="800" height="600"></canvas>
-            </div>
-    
-            <div class="score-gauge-container">
-                <div id="scoreGaugeP1" class="score-gauge p1"></div>
-                <div id="scoreGaugeP2" class="score-gauge p2"></div>
-            </div>
-            
-            <div class="score-board">
-                <p class="player-score p1">P1 スコア: <span id="scoreP1">0</span></p>
-                <p class="player-score p2">P2 スコア: <span id="scoreP2">0</span></p>
-            </div>
-        </div>
 
+                    <div class="game-sidebar">
+                        
+                        <div id="all-player-statuses">
+                            <div class="player-status p1">
+                                <h2>PLAYER X (YOU)</h2>
+                                <p>ステータス: 走行中</p>
+                            </div>
+                        </div>
+
+                        <div class="gamepad-info">
+                            <h3>操作説明</h3>
+                            <p>移動: WASD / 矢印キー</p>
+                            <p>移動: ゲームパッド 十字キー / 左スティック</p>
+                            <p id="gamepad-status">コントローラー接続を確認中...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                </div>
+        </div>
     </div>
 
-    <div id="victoryScreen" class="victory-screen">
-        <div class="victory-content">
-            <h2 id="victoryMessage"></h2>
-            <p class="final-score p1">P1 スコア: <span id="finalScoreP1">0</span></p>
-            <p class="final-score p2">P2 スコア: <span id="finalScoreP2">0</span></p>
-            <button id="restartButton">もう一度プレイ</button>
+    <div id="clear-screen" class="screen">
+        <div class="clear-container">
+            <h2 id="winner-title">レース終了！</h2>
+            <p id="clear-message">PLAYER X の勝利です！</p>
+            <button id="back-to-select-clear" class="menu-button">タイトルに戻る</button>
         </div>
     </div>
-    
-    <script src="/socket.io/socket.io.js"></script> 
+
+    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
